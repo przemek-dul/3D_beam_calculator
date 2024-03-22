@@ -3,11 +3,11 @@ The software utilizes the Finite Element Method (FEM) to solve the differential 
 type of finite element based on the Timoshenko–Ehrenfest beam theory. The calculator computes deformations, stresses, and internal forces
 within the structure. 
 
-Documentation:
+Documentation
 ------------
 Documentation will be created soon.
 
-Required Libraries:
+Required Libraries
 ------------
 - **Numpy:** https://www.numpy.org
 - **Matplotlib:** https://www.matplotlib.org
