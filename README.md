@@ -14,7 +14,7 @@ Required Libraries:
 - **Plotly:** https://www.plotly.com/python/
 - **mplcursors:** https://www.mplcursors.readthedocs.io/en/stable/
 - **Loguru:** https://loguru.readthedocs.io/en/stable/
-- **PyGt5:** https://pypi.org/project/PyQt5/
+- **PyQt5:** https://pypi.org/project/PyQt5/
 
 All required libraries can be installed via pip using the following command:
 
