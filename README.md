@@ -17,15 +17,15 @@ Required Libraries:
 - **PyGt5:** https://pypi.org/project/PyQt5/
 
 All required libraries can be installed via pip using the following command:
-::
 
+```bash
    pip install "libname"
 
 Installation
 ------------
 Currently, the software can only be installed by cloning the repository. This can be achieved using Git with the following command:
-::
 
+```bash
    git clone https://github.com/przemek-dul/3D_beam_calculator
 
 System requirements
