@@ -20,14 +20,14 @@ All required libraries can be installed via pip using the following command:
 
 ```bash
    pip install "libname"
-
+```
 Installation
 ------------
 Currently, the software can only be installed by cloning the repository. This can be achieved using Git with the following command:
 
 ```bash
    git clone https://github.com/przemek-dul/3D_beam_calculator
-
+```
 System requirements
 ------------
 The software is compatible with Windows and Linux systems. Compatibility with iOS has not been tested. On Linux, the Plotly result graphs
