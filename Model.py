@@ -5,10 +5,14 @@ from Load import Displacement, Force, Torque, Pressure
 
 
 class Static:
-    def __init__(self, mesh: Mesh, displacement_bc: list, forces_bc: list):
+    def __init__(self, mesh: Mesh, displacement_bc: list, forces_bc: list, analytical_shear_stresses: bool = False):
         self.mesh = mesh
         self.displacement_bc = displacement_bc  # boundary conditions of the restraint
         self.forces_bc = forces_bc  # forcing boundary conditions
+        """
+        if true recalculates stresses based on analytical theory - only available for standard cross sections
+        """
+        self.analytical_shear_stresses = analytical_shear_stresses
 
         self.check_input()
         self.check_if_fix()
@@ -42,6 +46,8 @@ class Static:
             for bc in self.forces_bc:
                 if type(bc) != Force and type(bc) != Torque and type(bc) != Pressure:
                     raise TypeError("elements of forces_bc list must be Force, Torque or Pressure")
+        if type(self.analytical_shear_stresses) != bool:
+            raise TypeError("argument analytical_shear_stresses must be bool")
 
     def check_if_fix(self):
         # check if system is fixed in space
@@ -246,6 +252,13 @@ class Static:
             for i in range(0, 6):
                 self.nodes[n].displacement_vector[0, i] = self.x_matrix[6 * n + i, 0]
 
+        if self.analytical_shear_stresses:
+            for element in self.elements:
+                if element.section.custom:
+                    AttributeError("Option - analytical_shear_stresses can be true only for standard cross sections")
+
+                element.analytical_shear_stresses = True
+
         self.solved = True
         logger.info("Solution done")
 
@@ -263,16 +276,23 @@ class Static:
 
     def get_elements_stress_force(self, resolution, index=0):
         # returns 2d arrays of stresses and forces for all elements
-        stress_vector = np.empty((0, 7, resolution-1))
+        stress_vector = np.empty((0, 6, resolution-1))
         force_vector = np.empty((0, 6, resolution-1))
 
         for element in self.elements:
             in_stress, in_force = element.get_stress_force_vector(resolution, index=index)
-
             stress_vector = np.vstack((stress_vector, [in_stress]))
             force_vector = np.vstack((force_vector, [in_force]))
 
         return stress_vector, force_vector
+
+    def get_vMs(self, resolution, index=0):
+        # returns 2d arrays of von Misses stresses for all elements
+        vMs = np.empty((0, resolution - 1))
+        for element in self.elements:
+            INvMs = element.get_vMs(resolution, index=index)
+            vMs = np.vstack([vMs, INvMs])
+        return vMs
 
     def get_points(self):
         # returns all points that creates geometry

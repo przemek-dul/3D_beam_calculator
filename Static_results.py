@@ -7,10 +7,11 @@ from PyQt5.QtCore import QUrl
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import QApplication
 from Model import Static
-from modules.Graph import Graph2d, Bar_2d, Graph3d, Bar_3d
+from modules.Graph import Graph2d, Bar_2d, Graph3d, Bar_3d, Section_graph
 import numpy as np
 import plotly.graph_objects as go
 from Line import Line
+from loguru import logger
 
 
 class Static_results:
@@ -27,14 +28,26 @@ class Static_results:
             raise AttributeError("passed model is not solved")
 
     # resolution defines number of points per element to approximate values by shape functions
-    def _get_resolution(self, value):
+    def _get_resolution(self, value, option='default'):
         # automatic calculate resolution if user did not define it
+        max_resolution = 100
+        min_resolution = 3
         if value != 'auto':
             return value
         else:
-            resolution = int(-0.28 * len(self._model.elements) + 37.82)
-            if resolution < 2:
-                resolution = 2
+            q_e = len(self._model.elements)
+            if q_e < 30:
+                resolution = max_resolution
+            elif q_e < 1000:
+                resolution = int(max_resolution - (max_resolution - min_resolution) * (q_e - 10) / 40)
+            else:
+                resolution = min_resolution
+
+            if option == 'total':
+                resolution = int(resolution/8)
+            if resolution < 3:
+                resolution = 3
+
             return resolution
 
     def _get_data(self, option, resolution, data_type, index=0):
@@ -49,12 +62,12 @@ class Static_results:
                     'total_rot': {'index': 7, 'tittle': 'Total rotation'}}
 
         stress_key = {'nx': {'index': 0, 'tittle': 'Normal stress due to stretch'},
-                      'sy': {'index': 1, 'tittle': 'Shear stress due to bending in local y-direction'},
-                      'sz': {'index': 2, 'tittle': 'Shear stress due to bending in local z-direction'},
+                      'sy': {'index': 1, 'tittle': 'Maximum Shear stress due to bending in local y-direction'},
+                      'sz': {'index': 2, 'tittle': 'Maximum Shear stress due to bending in local z-direction'},
                       'st': {'index': 3, 'tittle': 'Maximum shear stress due to torsion'},
                       'ny': {'index': 4, 'tittle': 'Maximum Normal stress due to bending in local y-direction'},
                       'nz': {'index': 5, 'tittle': 'Maximum Normal stress due to bending in local z-direction'},
-                      'total': {'index': 6, 'tittle': 'von Mises stress'}}
+                      'total': {'index': 6, 'tittle': 'Maximum von Misses Stress'}}
 
         force_key = {'fx': {'index': 0, 'tittle': 'Strain force - local x direction'},
                      'fy': {'index': 1, 'tittle': 'Shear force - local y direction'},
@@ -71,8 +84,12 @@ class Static_results:
         elif data_type == 'stress':
             main_key = stress_key
 
-            values, _ = self._model.get_elements_stress_force(resolution, index=index)
-            values = values[:, main_key[option]['index'], :]
+            if main_key[option]['index'] != 6:
+                values, _ = self._model.get_elements_stress_force(resolution, index=index)
+                values = values[:, main_key[option]['index'], :]
+            else:
+                logger.warning("""Von Mises stress for torsion of non-circular cross section gives invalid results!""")
+                values = self._model.get_vMs(resolution, index)
 
         else:
             main_key = force_key
@@ -121,7 +138,7 @@ class Static_results:
         elif data_type == 'stress':
             if option not in ('nx', 'sy', 'sz', 'st', 'ny', 'nz', 'total'):
                 raise ValueError("""argument - must take one of the following values:
-                 'nx', 'sy', 'sz', 'st', 'ny', 'nz', 'total'""")
+                 'nx', 'sy', 'sz', 'st', 'ny', 'nz', 'total""")
 
         elif data_type == 'force':
             if option not in ('fx', 'fy', 'fz', 'mx', 'my', 'mz'):
@@ -175,7 +192,7 @@ class Static_results:
                               show_undeformed=show_undeformed, show_points=show_points, show_nodes=show_nodes,
                               cursor=cursor)
 
-        resolution = self._get_resolution(resolution)
+        resolution = self._get_resolution(resolution, option)
         indexes, x_axis, y_axis = self._get_plane_index(plane)
 
         disp_vector, points_vector, value, title = self._get_data(option, resolution, data_type)
@@ -198,7 +215,7 @@ class Static_results:
         self._check_fig_input(data_type=data_type, option=option, resolution=resolution, scale=scale,
                               show_undeformed=show_undeformed, show_points=show_points, show_nodes=show_nodes)
         # mother function for deformation, stress and forces graphs for plotly basic plot
-        resolution = self._get_resolution(resolution)
+        resolution = self._get_resolution(resolution, option)
         disp_vector, points_vector, value, title = self._get_data(option, resolution, data_type)
 
         points_key = self._model.get_points()
@@ -253,7 +270,8 @@ class Static_results:
         # mother function for deformation, stress and forces graphs for matplotlib bar plot
         self._check_fig_input(data_type=data_type, option=option, resolution=resolution, plane=plane, cursor=cursor)
 
-        resolution = self._get_resolution(resolution)
+        resolution = self._get_resolution(resolution, option)
+
         indexes, x_axis, y_axis = self._get_plane_index(plane)
 
         disp_vector, points_vector, value, title = self._get_data(option, resolution, data_type)
@@ -274,7 +292,8 @@ class Static_results:
         # mother function for deformation, stress and forces graphs for plotly bar plot
         self._check_fig_input(data_type=data_type, option=option, resolution=resolution)
 
-        resolution = self._get_resolution(resolution)
+        resolution = self._get_resolution(resolution, option)
+
         disp_vector, points_vector, value, title = self._get_data(option, resolution, data_type)
         points_key = self._model.get_points()
         fig_obj = Bar_3d(value, points_vector, self._model.elements, points_key)
@@ -326,8 +345,8 @@ class Static_results:
             window.show()  # show all plotly figures
 
         plt.show()  # show all matplotlib figures
-        app.exec_()
-
+        if len(self._plotly_figs) > 0:
+            app.exec_()
         for i in range(1, index):
             file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), f'temp/fig{i}.html'))
             os.remove(file_path)  # remove all saved figures from temp directory after close all windows
@@ -339,7 +358,7 @@ class Static_results:
 
     def _check_max_value_input(self, option, lines, data_type):
         deformation_key = ('ux', 'uy', 'uz', 'rotx', 'roty', 'rotz', 'total_disp', 'total_rot')
-        stress_key = ('nx', 'sy', 'sz', 'st', 'ny', 'nz', 'total')
+        stress_key = ('nx', 'sy', 'sz', 'st', 'ny', 'nz')
         force_key = ('fx', 'fy', 'fz', 'mx', 'my', 'mz')
 
         if data_type == 'deformation':
@@ -372,7 +391,7 @@ class Static_results:
         option = option.lower()
 
         disp_key = {'ux': 0, 'uy': 1, 'uz': 2, 'rotx': 3, 'roty': 4, 'rotz': 5, 'total_disp': 6, 'total_rot': 7}
-        stress_key = {'nx': 0, 'sy': 1, 'sz': 2, 'st': 3, 'ny': 4, 'nz': 5, 'total': 6}
+        stress_key = {'nx': 0, 'sy': 1, 'sz': 2, 'st': 3, 'ny': 4, 'nz': 5}
         force_key = {'fx': 0, 'fy': 1, 'fz': 2, 'mx': 3, 'my': 4, 'mz': 5}
 
         res = self._get_resolution('auto')
@@ -444,3 +463,64 @@ class Static_results:
                                                                                       'My': total_force[4],
                                                                                       'Mz': total_force[5]}
         return output
+
+    def section_stress(self, option: str, line: Line, length: float, resolution: int = 'auto') -> plt.figure:
+
+        # check input
+        stress_key = ('nx', 'sy', 'sz', 'st', 'ny', 'nz', 'total')
+        if type(option) != str:
+            raise TypeError('argument - option must be a STRING')
+        else:
+            option = option.lower()
+            if option not in stress_key:
+                raise ValueError(f"argument - option must take one of the following values:{stress_key}")
+
+        if type(line) != Line:
+            raise TypeError("argument - line must be Line")
+
+        if type(length) != float and type(length) != int:
+            raise TypeError("argument - length must be a FLOAT or INT")
+        elif length > line.len or length < 0:
+            raise ValueError(f"argument - length must grater than 0 and less than Line's length")
+
+        stress_key = {'nx': {'index': 0, 'tittle': 'Normal stress due to stretch'},
+                      'sy': {'index': 1, 'tittle': 'Shear stress due to bending in local y-direction'},
+                      'sz': {'index': 2, 'tittle': 'Shear stress due to bending in local z-direction'},
+                      'st': {'index': 3, 'tittle': 'Shear stress due to torsion'},
+                      'ny': {'index': 4, 'tittle': 'Normal stress due to bending in local y-direction'},
+                      'nz': {'index': 5, 'tittle': 'Normal stress due to bending in local z-direction'},
+                      'total': {'index': 6, 'tittle': 'Von Misses Stress'}}
+        if type(resolution) != str and type(resolution) != int:
+            raise TypeError("argument - resolution must be INT or 'auto'")
+        elif type(resolution) == str and resolution != 'auto':
+            raise ValueError("argument - resolution must be INT or 'auto'")
+        elif type(resolution) == int and resolution < 2:
+            raise ValueError("argument - resolution must be greater or equal to 3")
+
+        resolution = self._get_resolution(resolution)
+
+        in_length = 0
+        element = None
+
+        for i in line.elements_index:
+            element = self._model.elements[i]
+            in_length += element.L
+            if in_length >= length:
+                break
+        out_length = in_length - length
+        title = stress_key[option]['tittle']
+        values = element.get_section_stresses(out_length, resolution)
+
+        if option == 'total' and not element.section.circular and np.amax(values[3]**2) > 0.01:
+            logger.warning("""Von Mises stress for torsion of non-circular cross section gives invalid results!""")
+
+        values = values[stress_key[option]['index']]
+        graph = Section_graph(element, values, line, length)
+
+        fig, ax = graph.get_fig()
+        ax.set_title(title)
+
+        self._mpl_figs.append(fig)
+
+        return fig
+

@@ -2,13 +2,14 @@ import numpy as np
 
 
 class Element:
-    def __init__(self, node1, node2, material, section, direction_vector):
+    def __init__(self, node1, node2, material, section, direction_vector, analytical_shear_stresses=False):
         self.node1 = node1
         self.node2 = node2
         self.L = np.sqrt(pow(node1.x - node2.x, 2) + pow(node1.y - node2.y, 2) + pow(node1.z - node2.z, 2))
         self.material = material
         self.section = section
         self.direction_vector = direction_vector  # direction vector of local z axis
+        self.analytical_shear_stresses = analytical_shear_stresses
 
         self.G = self.material.E / (2 * (1 + self.material.v))  # shear modul
         self.shear_factor = self.section.shear_factor_fun(self.material.v)  # shear correction factor
@@ -177,7 +178,7 @@ class Element:
             return local_disp_matrix, points
 
     def get_stress_force_vector(self, resolution, index=0):
-        stress_vector = np.empty((7, 0))
+        stress_vector = np.empty((6, 0))
         force_vector = np.empty((6, 0))
 
         # local deformations to calculate stress along element
@@ -207,20 +208,26 @@ class Element:
             T3 = round((-self.G * self.phi_y * (1 / (1 + self.phi_y)) * (
                         2 * disp[2, i] + disp[4, i] * l - 2 * disp[2, i + 1] + disp[4, i + 1] * l)) / (2 * l), 5)
 
-            #  von Mises stress
-            vMs = np.sqrt(0.5 * (S1 ** 2 + 3 * T1 ** 2 + S2 ** 2 + 3 * T2 ** 2 + S3 ** 2 + 3 * T3 ** 2))
-
-            bufor_stress = np.array([[S1], [T2], [T3], [T1], [S2], [S3], [vMs]])
-
             #  Forces based on stress and properties of cross-section
             F_X = round(self.section.A * S1, 5)
             M_X = round(T1 * (self.section.Iz + self.section.Iy) / max(self.section.max_z, self.section.max_y), 5)
             M_Z = round(S2 * self.section.Iz / self.section.max_y, 5)
-            # F_Y = round(T2 * self.section.Iz * self.section.y_wth / self.section.Qz, 5)
-            F_Y = round(T2 * self.section.A, 5) * self.shear_factor
+            F_Y = round(T2 * self.section.A * self.shear_factor, 5)
             M_Y = round(S3 * self.section.Iy / self.section.max_z, 5)
-            # F_Z = round(T3 * self.section.Iy * self.section.z_wth / self.section.Qy, 5)
-            F_Z = round(T3 * self.section.A, 5) * self.shear_factor
+            F_Z = round(T3 * self.section.A * self.shear_factor, 5)
+
+            if self.analytical_shear_stresses:
+                if self.section.custom:
+                    raise AttributeError(
+                        "Analytical_shear_stresses stress is available only for standard cross sections")
+
+                T1 = self.section.torsion_shear(M_X, self.section.max_z, 0)
+                T2 = F_Y * self.section.bending_shear(np.array([[0]]), 'z') / self.section.Iz
+                T3 = F_Z * self.section.bending_shear(np.array([[0]]), 'y') / self.section.Iy
+                T2 = T2[0,0]
+                T3 = T3[0,0]
+
+            bufor_stress = np.array([[S1], [T2], [T3], [T1], [S2], [S3]])
 
             bufor_force = np.array([[F_X], [F_Y], [F_Z], [M_X], [M_Y], [M_Z]])
 
@@ -268,3 +275,52 @@ class Element:
              [self.node2.displacement_vector[index, 4]], [self.node2.displacement_vector[0, 5]]])
 
         return np.dot(self.t_matrix, c_matrix)
+
+    def get_section_stresses(self, length, resolution, index=0):
+        # returns stress distribution on the cross-section at specified length
+        if self.section.custom:
+            raise AttributeError("Section stress is available only for standard cross sections")
+
+        _, forces = self.get_stress_force_vector(resolution, index)
+        step = self.L / (resolution-2)
+        ind = int(length / step)
+        A = self.section.A
+        z = self.section.z_points
+        y = self.section.y_points
+        Iz = self.section.Iz
+        Iy = self.section.Iy
+
+        #  Normal stress due to stretch
+        S1 = (forces[0, ind] / A) * np.ones(np.shape(z))
+
+        #  Shear stress due to torsion
+        T1 = self.section.torsion_shear(forces[3, ind], z, y)
+
+        #  Normal stress due to bending in y-direction
+        S2 = forces[5, ind] * y / Iz
+
+        #  Shear stress due to bending in y-direction
+        T2 = forces[1, ind] * self.section.bending_shear(y, 'z') / Iz
+
+        #  Normal stress due to bending in z-direction
+        S3 = forces[4, ind] * z / Iy
+
+        #  Shear stress due to bending in z-direction
+        T3 = forces[2, ind] * self.section.bending_shear(z, 'y') / Iy
+
+        vMs = np.sqrt((S1 + S2 + S3) ** 2 + 3 * (T1 ** 2 + T2 ** 2 + T3 ** 2))
+
+        stress_vector = np.array([S1, T2, T3, T1, S2, S3, vMs])
+
+        stress_vector = np.array([self.section.mask(stress) for stress in stress_vector])
+
+        return stress_vector
+
+    def get_vMs(self, resolution, index=0):
+        #  returns maximum von Misses stress along element based on cross section stress distribution
+        if self.section.custom:
+            raise AttributeError("Von Misses stress stress is available only for standard cross sections")
+        lengths = np.linspace(0, self.L, resolution-1)
+        vMs = np.array([round(np.amax(self.get_section_stresses(l, resolution, index)), 5) for l in lengths])
+        return vMs
+

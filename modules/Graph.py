@@ -649,3 +649,47 @@ class Bar_3d(Bar_2d):
         fig.update_scenes(camera_projection_type="orthographic")
 
         return fig
+
+
+class Section_graph:
+    def __init__(self, element, values, line, length):
+        self.element = element
+        self.values = values
+        self.line = line
+        self.length = length
+
+    def get_fig(self):
+        section = self.element.section
+        self.values = section.mask(self.values)
+        indicator = f"\n Line index = {self.line.index}||Length = {self.length}"
+        cmin = np.amin(self.values)
+        cmax = np.amax(self.values)
+
+        if cmin != cmax:
+            cmap = plt.get_cmap('jet')
+        else:
+            single_color = plt.get_cmap('jet')(0.5)
+            cmap = mpl.colors.ListedColormap([single_color])
+
+        norm = plt.Normalize(cmin, cmax)
+
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.pcolormesh(section.z_points, section.y_points, self.values, cmap=cmap, norm=norm)
+
+        ax.axhline(y=section.origin_point[1], color='k')
+        ax.axvline(x=section.origin_point[0], color='k')
+        ax.set_ylabel('Y')
+        ax.set_xlabel('Z' + indicator)
+
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array(self.values)
+        cbar = plt.colorbar(sm, ax=ax)
+        cbar.ax.text(1.05, 1.05, f"Max: {value_format(cmax)}", transform=cbar.ax.transAxes, va='bottom', ha='left')
+        cbar.ax.set_xlabel(f"Min: {value_format(cmin)}", rotation=0, ha='left')
+
+        if cmin == cmax:
+            cbar.set_ticks(np.linspace(cmin, cmin, num=1))
+        ax.axis('equal')
+
+        return fig, ax
+

@@ -30,7 +30,6 @@ point1 = Point(x=0, y=0, z=0, index=1)
 point2 = Point(x=2, y=0, z=0, index=2)
 point3 = Point(x=4, y=0, z=0, index=3)
 
-
 line1 = Line(point1=point1, point2=point2, material=material, section=section)
 line2 = Line(point1=point2, point2=point3, material=material, section=section)
 
@@ -69,9 +68,9 @@ fig3 = results.bar_force_3d(option='fy')
 fig4 = results.bar_force_3d(option='mz')
 
 # save graphs
-pl.offline.plot(fig1, filename='deformations-y_direction.html', auto_open=False)
-pl.offline.plot(fig2, filename='rotation-z_axis.html', auto_open=False)
-pl.offline.plot(fig3, filename='shear_force-y_direction.html', auto_open=False)
-pl.offline.plot(fig4, filename='bending_moment-z_axis.html', auto_open=False)
+# pl.offline.plot(fig1, filename='deformations-y_direction.html', auto_open=False)
+# pl.offline.plot(fig2, filename='rotation-z_axis.html', auto_open=False)
+# pl.offline.plot(fig3, filename='shear_force-y_direction.html', auto_open=False)
+# pl.offline.plot(fig4, filename='bending_moment-z_axis.html', auto_open=False)
 
 results.evaluate_all_results()

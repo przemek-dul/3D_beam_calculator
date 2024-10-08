@@ -7,7 +7,7 @@ import vg
 
 class Line:
     def __init__(self, point1: Point, point2: Point, material: Material, section: Section,
-                 direction_vector: list = None, extra_point: list = None):
+                 direction_vector: list = None, extra_point: list = None, index: int = None):
         self.point1 = point1
         self.point2 = point2
         self.material = material
@@ -16,6 +16,7 @@ class Line:
         self.len = 0
         self.extra_point = extra_point  # point used to calculate direction vector of local z axis
         self.direction_vector = direction_vector  # direction vector of local z axis
+        self.index = index
 
         self.check_input()
         self.get_direction_vector()
@@ -48,9 +49,11 @@ class Line:
 
             self.direction_vector = n1_vector
 
-        if vg.almost_collinear(t_vector, self.direction_vector):
-            pass
-            #raise AttributeError("Direction vector is parallel to line")
+        cross_product = np.cross(t_vector, self.direction_vector)
+
+        #  check if direction vector is not parallel to line
+        if np.all(np.abs(cross_product) < 0.001):
+            raise AttributeError("Direction vector is parallel to line")
 
     def check_input(self):
         if type(self.point1) != Point or type(self.point2) != Point:
