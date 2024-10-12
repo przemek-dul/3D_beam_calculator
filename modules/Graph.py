@@ -660,7 +660,7 @@ class Section_graph:
 
     def get_fig(self):
         section = self.element.section
-        self.values = section.mask(self.values)
+        self.values = section._mask(self.values)
         indicator = f"\n Line index = {self.line.index}||Length = {self.length}"
         cmin = np.amin(self.values)
         cmax = np.amax(self.values)
@@ -674,7 +674,7 @@ class Section_graph:
         norm = plt.Normalize(cmin, cmax)
 
         fig, ax = plt.subplots(figsize=(8, 6))
-        ax.pcolormesh(section.z_points, section.y_points, self.values, cmap=cmap, norm=norm)
+        ax.pcolormesh(section._z_points, section._y_points, self.values, cmap=cmap, norm=norm)
 
         ax.axhline(y=section.origin_point[1], color='k')
         ax.axvline(x=section.origin_point[0], color='k')

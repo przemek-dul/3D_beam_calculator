@@ -2,7 +2,6 @@ import numpy as np
 from Point import Point
 from Material import Material
 from Section import Section
-import vg
 
 
 class Line:
@@ -18,10 +17,10 @@ class Line:
         self.direction_vector = direction_vector  # direction vector of local z axis
         self.index = index
 
-        self.check_input()
-        self.get_direction_vector()
+        self._check_input()
+        self._get_direction_vector()
 
-    def get_direction_vector(self):
+    def _get_direction_vector(self):
         """
         Returns direction vector of local z axis. If user did not define direction_vector and extra_point, default
         direction vector is [0, 0, -1].
@@ -55,7 +54,7 @@ class Line:
         if np.all(np.abs(cross_product) < 0.001):
             raise AttributeError("Direction vector is parallel to line")
 
-    def check_input(self):
+    def _check_input(self):
         if type(self.point1) != Point or type(self.point2) != Point:
             raise TypeError("argument - point must be Point")
 
@@ -90,3 +89,9 @@ class Line:
                 for element in self.direction_vector:
                     if type(element) != float and type(element) != int:
                         raise TypeError("elements of direction_vector must be FLOAT or INT")
+
+        if self.index is not None:
+            if type(self.index) != int:
+                raise TypeError("index must be INT")
+            elif self.index < 0:
+                raise AttributeError("index must be equal or greater than 0")

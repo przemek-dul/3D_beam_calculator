@@ -10,9 +10,9 @@ class Point:
         self.node_number = None  # index of the node of same coordinates as the point
         self.point_vector = np.array([x, y, z])
 
-        self.check_input()
+        self._check_input()
 
-    def check_input(self):
+    def _check_input(self):
 
         c1 = type(self.x) == float or type(self.x) == int
         c2 = type(self.y) == float or type(self.y) == int
@@ -21,4 +21,8 @@ class Point:
         if not(c1 and c2 and c3):
             raise TypeError("coordinates of points must be FLOAT or INT")
 
-
+        if self.index is not None:
+            if type(self.index) != int:
+                raise TypeError("index must be INT")
+            elif self.index < 0:
+                raise AttributeError("index must be equal or greater than 0")

@@ -12,7 +12,7 @@ class Element:
         self.analytical_shear_stresses = analytical_shear_stresses
 
         self.G = self.material.E / (2 * (1 + self.material.v))  # shear modul
-        self.shear_factor = self.section.shear_factor_fun(self.material.v)  # shear correction factor
+        self.shear_factor = self.section._shear_factor_fun(self.material.v)  # shear correction factor
 
         self.phi_z = 12 * self.material.E * self.section.Iz / (self.shear_factor * self.section.A * self.G * pow(self.L, 2))
         self.phi_y = 12 * self.material.E * self.section.Iy / (self.shear_factor * self.section.A * self.G * pow(self.L, 2))
@@ -221,9 +221,9 @@ class Element:
                     raise AttributeError(
                         "Analytical_shear_stresses stress is available only for standard cross sections")
 
-                T1 = self.section.torsion_shear(M_X, self.section.max_z, 0)
-                T2 = F_Y * self.section.bending_shear(np.array([[0]]), 'z') / self.section.Iz
-                T3 = F_Z * self.section.bending_shear(np.array([[0]]), 'y') / self.section.Iy
+                T1 = self.section._torsion_shear(M_X, self.section.max_z, 0)
+                T2 = F_Y * self.section._bending_shear(np.array([[0]]), 'z') / self.section.Iz
+                T3 = F_Z * self.section._bending_shear(np.array([[0]]), 'y') / self.section.Iy
                 T2 = T2[0,0]
                 T3 = T3[0,0]
 
@@ -285,8 +285,8 @@ class Element:
         step = self.L / (resolution-2)
         ind = int(length / step)
         A = self.section.A
-        z = self.section.z_points
-        y = self.section.y_points
+        z = self.section._z_points
+        y = self.section._y_points
         Iz = self.section.Iz
         Iy = self.section.Iy
 
@@ -294,25 +294,25 @@ class Element:
         S1 = (forces[0, ind] / A) * np.ones(np.shape(z))
 
         #  Shear stress due to torsion
-        T1 = self.section.torsion_shear(forces[3, ind], z, y)
+        T1 = self.section._torsion_shear(forces[3, ind], z, y)
 
         #  Normal stress due to bending in y-direction
         S2 = forces[5, ind] * y / Iz
 
         #  Shear stress due to bending in y-direction
-        T2 = forces[1, ind] * self.section.bending_shear(y, 'z') / Iz
+        T2 = forces[1, ind] * self.section._bending_shear(y, 'z') / Iz
 
         #  Normal stress due to bending in z-direction
         S3 = forces[4, ind] * z / Iy
 
         #  Shear stress due to bending in z-direction
-        T3 = forces[2, ind] * self.section.bending_shear(z, 'y') / Iy
+        T3 = forces[2, ind] * self.section._bending_shear(z, 'y') / Iy
 
         vMs = np.sqrt((S1 + S2 + S3) ** 2 + 3 * (T1 ** 2 + T2 ** 2 + T3 ** 2))
 
         stress_vector = np.array([S1, T2, T3, T1, S2, S3, vMs])
 
-        stress_vector = np.array([self.section.mask(stress) for stress in stress_vector])
+        stress_vector = np.array([self.section._mask(stress) for stress in stress_vector])
 
         return stress_vector
 

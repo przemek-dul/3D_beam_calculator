@@ -11,9 +11,9 @@ class Force:
         self.point = point
         self.node = None  # index that specify, where in the model's input matrix pass value of load
 
-        self.check_input()
+        self._check_input()
 
-    def get_node(self):
+    def _get_node(self):
         #  calculate node index for load application, based on input point and global direction
         node = None
         if self.direction == 'x':
@@ -24,7 +24,7 @@ class Force:
             node = 6 * (self.point.node_number - 1) + 2
         return node
 
-    def check_input(self):
+    def _check_input(self):
         if type(self.point) != Point:
             raise TypeError('argument point must be Point')
         if type(self.direction) != str:
@@ -44,10 +44,10 @@ class Torque(Force):
         super().__init__(point, axis, value)
         self.type = 'Torque'
 
-    def get_node(self):
-        return super().get_node() + 3
+    def _get_node(self):
+        return super()._get_node() + 3
 
-    def check_input(self):
+    def _check_input(self):
         if type(self.point) != Point:
             raise TypeError('argument - point of must be Point')
         if type(self.axis) != str:
@@ -67,9 +67,9 @@ class Pressure:
         self.value = value  # single value for constant input and vector for non-constant
         self.direction = direction  # local direction of distributed load
 
-        self.check_input()
+        self._check_input()
 
-    def find_index(self, value, values):
+    def _find_index(self, value, values):
         # see model.apply_loads... pressure bc
         for i in range(0, len(values)):
             if value < values[i]:
@@ -77,7 +77,7 @@ class Pressure:
             elif value == values[i]:
                 return [i]
 
-    def extend_value_vector(self):
+    def _extend_value_vector(self):
         """
         The density of vectors should be high enough to have at least three values per line element.
         Otherwise, input torque at nodes will take the value 0. Function extend the vector by approximation
@@ -97,19 +97,19 @@ class Pressure:
         self.value = vector
 
     #  variables used to calculate residuals forces and moments at nodes, acting as a result of distributed load
-    def calc_N1(self, x, l):
+    def _calc_N1(self, x, l):
         return 1 - 3 * x ** 2 / l ** 2 + 2 * x ** 3 / l ** 3
 
-    def calc_N2(self, x, l):
+    def _calc_N2(self, x, l):
         return x - 2 * x ** 2 / l + x ** 3 / l ** 2
 
-    def calc_N3(self, x, l):
+    def _calc_N3(self, x, l):
         return 3 * x ** 2 / l ** 2 - 2 * x ** 3 / l ** 3
 
-    def calc_N4(self, x, l):
+    def _calc_N4(self, x, l):
         return -x ** 2 / l + x ** 3 / l ** 2
 
-    def check_input(self):
+    def _check_input(self):
         if type(self.line) != Line:
             raise TypeError("argument - line must be Line")
 
@@ -140,10 +140,10 @@ class Displacement:
         self.rot_z = rot_z
         self.DOF = DOF  # true if all degrees of freedom are to be taken away
 
-        self.check_input()
-        self.check_dof()
+        self._check_input()
+        self._check_dof()
 
-    def check_dof(self):
+    def _check_dof(self):
         #  Taking away all degrees of freedom if DOF is equal to True
         if self.DOF:
             self.ux = 0
@@ -153,7 +153,7 @@ class Displacement:
             self.rot_y = 0
             self.rot_z = 0
 
-    def get_nodes(self):
+    def _get_nodes(self):
         #  The function returns array, node index of load application and displacement value at this index.
         output = []
         if self.ux is not None:
@@ -177,7 +177,7 @@ class Displacement:
 
         return output
 
-    def check_input(self):
+    def _check_input(self):
         if type(self.point) != Point:
             raise TypeError('argument - point must be Point')
         if type(self.ux) != int and type(self.ux) != float and self.ux is not None:

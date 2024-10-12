@@ -6,7 +6,7 @@ from Model import Static
 from Load import Displacement, Force, Torque, Pressure
 from Material import Material
 from Static_results import Static_results as Results
-import plotly as pl
+
 
 # material definition
 E = 200000000000
@@ -30,7 +30,7 @@ line3 = Line(point1=point2, point2=point4, material=material, section=section, i
 
 # mesh definition - step 100cm
 mesh = Mesh()
-mesh.max_element_size(1, [line1, line2, line3])
+mesh.max_element_size(0.1, [line1, line2, line3])
 
 # boundary conditions definition
 force1 = Force(point=point3, direction='y', value=-50000)
@@ -46,15 +46,16 @@ model.solve()
 # plot results
 results = Results(model)
 
-fig1 = results.deformation_2d('uy', show_undeformed=True, show_points=True, show_nodes=True)
-fig2 = results.deformation_2d('rotz', show_undeformed=True, show_points=True, show_nodes=True)
+fig1 = results.deformation_3d('uy', show_undeformed=True, show_points=True, show_nodes=True)
+
+fig2 = results.deformation_3d('rotz', show_undeformed=True, show_points=True, show_nodes=True)
 
 fig3 = results.bar_force_2d(option='fy')
 fig4 = results.bar_force_2d(option='mz')
 
 fig5 = results.bar_stress_2d(option='ny')
 fig6 = results.bar_stress_2d(option='sy')
-fig7 = results.bar_stress_2d(option='total')
+fig7 = results.bar_stress_3d(option='total')
 
 fig8 = results.section_stress(option='ny', line=line2, length=3)
 fig9 = results.section_stress(option='sy', line=line2, length=3)

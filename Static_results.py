@@ -12,6 +12,7 @@ import numpy as np
 import plotly.graph_objects as go
 from Line import Line
 from loguru import logger
+from multiprocessing import Process, Queue
 
 
 class Static_results:
@@ -20,6 +21,18 @@ class Static_results:
 
         self._plotly_figs = []  # list of created matplotlib graphs
         self._mpl_figs = []  # list of created plotly graphs
+
+    def _run_method_in_process(self, method, args, queue):
+        result = method(*args)  # Call the method with the unpacked arguments
+        queue.put(result)  # Send the result back to the main process
+
+    def _get_fig(self, method, args):
+        queue = Queue()
+        process1 = Process(target=self._run_method_in_process, args=(method, args, queue))
+        process1.start()
+        process1.join(timeout=5)
+
+        return queue.get()
 
     def _check_input(self):
         if type(self._model) != Static:
@@ -35,7 +48,7 @@ class Static_results:
         if value != 'auto':
             return value
         else:
-            q_e = len(self._model.elements)
+            q_e = len(self._model._elements)
             if q_e < 30:
                 resolution = max_resolution
             elif q_e < 1000:
@@ -55,11 +68,13 @@ class Static_results:
         displacement_vector, points_vector = self._model.get_elements_disp(resolution, index=index)
         option = option.lower()
 
-        disp_key = {'ux': {'index': 0, 'tittle': 'Ux deformation'}, 'uy': {'index': 1, 'tittle': 'Uy deformation'},
-                    'uz': {'index': 2, 'tittle': 'Uz deformation'}, 'rotx': {'index': 3, 'tittle': 'Rot_x angle'},
-                    'roty': {'index': 4, 'tittle': 'Rot_y angle'}, 'rotz': {'index': 5, 'tittle': 'Rot_z angle'},
-                    'total_disp': {'index': 6, 'tittle': 'Total deformation'},
-                    'total_rot': {'index': 7, 'tittle': 'Total rotation'}}
+        disp_key = {'ux': {'index': 0, 'tittle': 'Ux displacement'}, 'uy': {'index': 1, 'tittle': 'Uy displacement'},
+                    'uz': {'index': 2, 'tittle': 'Uz displacement'},
+                    'rotx': {'index': 3, 'tittle': 'Rot_x angular displacement'},
+                    'roty': {'index': 4, 'tittle': 'Rot_y angular displacement'},
+                    'rotz': {'index': 5, 'tittle': 'Rot_z angular displacement'},
+                    'total_disp': {'index': 6, 'tittle': 'Total displacement'},
+                    'total_rot': {'index': 7, 'tittle': 'Total angular displacement'}}
 
         stress_key = {'nx': {'index': 0, 'tittle': 'Normal stress due to stretch'},
                       'sy': {'index': 1, 'tittle': 'Maximum Shear stress due to bending in local y-direction'},
@@ -207,8 +222,6 @@ class Static_results:
         ax.set_ylabel(y_axis)
         ax.set_xlabel(x_axis)
 
-        self._mpl_figs.append(fig)
-
         return fig
 
     def _basic_3d_results(self, option, scale, show_undeformed, show_points, show_nodes, resolution, data_type):
@@ -225,46 +238,56 @@ class Static_results:
         fig = fig_obj.get_fig(show_points=show_points, show_nodes=show_nodes, show_undeformed=show_undeformed)
         fig.update_layout(title=title)
 
-        self._plotly_figs.append(fig)
-
         return fig
 
     def deformation_2d(self, option: str, scale: float = 'auto', plane: str = 'xy', show_undeformed: bool = False,
                        show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto',
                        cursor: bool = False) -> plt.figure:
 
-        return self._basic_2d_results(option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
-                                      'deformation', cursor)
+        fig = self._get_fig(self._basic_2d_results, (option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
+                                      'deformation', cursor))
+        self._mpl_figs.append(fig)
+        return fig
 
     def deformation_3d(self, option: str, scale: float = 'auto', show_undeformed: bool = False,
                        show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto') -> go.Figure:
 
-        return self._basic_3d_results(option, scale, show_undeformed, show_points, show_nodes, resolution,
-                                      'deformation')
+        fig = self._get_fig(self._basic_3d_results, (option, scale, show_undeformed, show_points, show_nodes, resolution,
+                                      'deformation'))
+        self._plotly_figs.append(fig)
+        return fig
 
     def stress_2d(self, option: str, scale: float = 'auto', plane: str = 'xy', show_undeformed: bool = False,
                   show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto',
                   cursor: bool = False) -> plt.figure:
 
-        return self._basic_2d_results(option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
+        fig = self._basic_2d_results(option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
                                       'stress', cursor)
+        self._mpl_figs.append(fig)
+        return fig
 
     def stress_3d(self, option: str, scale: float = 'auto', show_undeformed: bool = False,
                   show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto') -> go.Figure:
 
-        return self._basic_3d_results(option, scale, show_undeformed, show_points, show_nodes, resolution, 'stress')
+        fig = self._get_fig(self._basic_3d_results, (option, scale, show_undeformed, show_points, show_nodes, resolution, 'stress'))
+        self._plotly_figs.append(fig)
+        return fig
 
     def force_2d(self, option: str, scale: float = 'auto', plane: str = 'xy', show_undeformed: bool = False,
                  show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto',
                  cursor: bool = False) -> plt.figure:
 
-        return self._basic_2d_results(option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
+        fig = self._basic_2d_results(option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
                                       'force', cursor)
+        self._mpl_figs.append(fig)
+        return fig
 
     def force_3d(self, option: str, scale: float = 'auto', show_undeformed: bool = False,
                  show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto') -> go.Figure:
 
-        return self._basic_3d_results(option, scale, show_undeformed, show_points, show_nodes, resolution, 'force')
+        fig = self._get_fig(self._basic_3d_results, (option, scale, show_undeformed, show_points, show_nodes, resolution, 'force'))
+        self._plotly_figs.append(fig)
+        return fig
 
     def _basic_2d_bar_results(self, option, plane, resolution, data_type, cursor):
         # mother function for deformation, stress and forces graphs for matplotlib bar plot
@@ -284,8 +307,6 @@ class Static_results:
         ax.set_ylabel(y_axis)
         ax.set_xlabel(x_axis)
 
-        self._mpl_figs.append(fig)
-
         return fig
 
     def _basic_3d_bar_results(self, option, resolution, data_type):
@@ -296,39 +317,48 @@ class Static_results:
 
         disp_vector, points_vector, value, title = self._get_data(option, resolution, data_type)
         points_key = self._model.get_points()
-        fig_obj = Bar_3d(value, points_vector, self._model.elements, points_key)
+        fig_obj = Bar_3d(value, points_vector, self._model._elements, points_key)
 
         fig = fig_obj.get_fig()
         fig.update_layout(title=title)
-
-        self._plotly_figs.append(fig)
 
         return fig
 
     def bar_deformation_2d(self, option: str, plane: str = 'xy', resolution: int = 'auto', cursor: bool = False)\
             -> plt.figure:
-        return self._basic_2d_bar_results(option, plane, resolution, 'deformation', cursor)
+        fig = self._basic_2d_bar_results(option, plane, resolution, 'deformation', cursor)
+        self._mpl_figs.append(fig)
+        return fig
 
     def bar_deformation_3d(self, option: str, resolution: int = 'auto') -> go.Figure:
-        return self._basic_3d_bar_results(option, resolution, 'deformation')
+        fig = self._get_fig(self._basic_3d_bar_results, (option, resolution, 'deformation'))
+        self._plotly_figs.append(fig)
+        return fig
 
     def bar_stress_2d(self, option: str, plane: str = 'xy', resolution: int = 'auto', cursor: bool = False)\
             -> plt.figure:
-        return self._basic_2d_bar_results(option, plane, resolution, 'stress', cursor)
+        fig = self._basic_2d_bar_results(option, plane, resolution, 'stress', cursor)
+        self._mpl_figs.append(fig)
+        return fig
 
     def bar_stress_3d(self, option: str, resolution: int = 'auto') -> go.Figure:
-        return self._basic_3d_bar_results(option, resolution, 'stress')
+        fig = self._get_fig(self._basic_3d_bar_results, (option, resolution, 'stress'))
+        self._plotly_figs.append(fig)
+        return fig
 
     def bar_force_2d(self, option: str, plane: str = 'xy', resolution: int = 'auto', cursor: bool = False)\
             -> plt.figure:
-        return self._basic_2d_bar_results(option, plane, resolution, 'force', cursor)
+        fig = self._basic_2d_bar_results(option, plane, resolution, 'force', cursor)
+        self._mpl_figs.append(fig)
+        return fig
 
     def bar_force_3d(self, option: str, resolution: int = 'auto') -> go.Figure:
-        return self._basic_3d_bar_results(option, resolution, 'force')
+        fig = self._get_fig(self._basic_3d_bar_results, (option, resolution, 'force'))
+        self._plotly_figs.append(fig)
+        return fig
 
     def evaluate_all_results(self):
         # shows all returned figures in separated windows
-        app = QApplication(sys.argv)  # qt5 application
         index = 1
         windows = []
         for fig in self._plotly_figs:
@@ -345,16 +375,10 @@ class Static_results:
             window.show()  # show all plotly figures
 
         plt.show()  # show all matplotlib figures
-        if len(self._plotly_figs) > 0:
-            app.exec_()
+
         for i in range(1, index):
             file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), f'temp/fig{i}.html'))
             os.remove(file_path)  # remove all saved figures from temp directory after close all windows
-
-        if len(self._mpl_figs) > 0:
-            return None
-        else:
-            sys.exit()  # shutdown by sys if user created any plotly figures
 
     def _check_max_value_input(self, option, lines, data_type):
         deformation_key = ('ux', 'uy', 'uz', 'rotx', 'roty', 'rotz', 'total_disp', 'total_rot')
@@ -397,21 +421,21 @@ class Static_results:
         res = self._get_resolution('auto')
 
         if lines is None:
-            lines = self._model.mesh.lines
+            lines = self._model._mesh.lines
 
         if data_type == 'deformation':
             main_key = disp_key
-            max_value = self._model.elements[lines[0].elements_index[0]].get_max_displacements(res)[main_key[option]]
+            max_value = self._model._elements[lines[0].elements_index[0]].get_max_displacements(res)[main_key[option]]
         elif data_type == 'stress':
             main_key = stress_key
-            max_value = self._model.elements[lines[0].elements_index[0]].get_max_stress(res)[main_key[option]]
+            max_value = self._model._elements[lines[0].elements_index[0]].get_max_stress(res)[main_key[option]]
         else:
             main_key = force_key
-            max_value = self._model.elements[lines[0].elements_index[0]].get_max_force(res)[main_key[option]]
+            max_value = self._model._elements[lines[0].elements_index[0]].get_max_force(res)[main_key[option]]
 
         for line in lines:
             for index in line.elements_index:
-                element = self._model.elements[index]
+                element = self._model._elements[index]
 
                 if data_type == 'deformation':
                     value = element.get_max_displacements(2)[main_key[option]]
@@ -438,13 +462,13 @@ class Static_results:
         # returns residuals forces and moments for points, where displacement boundary conditions were defined
         output = {}
         resolution = self._get_resolution('auto')
-        for point in self._model.displacement_points:
+        for point in self._model._displacement_points:
             node_index = point.node_number - 1
-            node = self._model.nodes[node_index]
+            node = self._model._nodes[node_index]
             total_force = np.zeros((6))
             for index in node.elements_index:
                 id = -1
-                element = self._model.elements[index]
+                element = self._model._elements[index]
                 if element.node1.index == node.index:
                     id = 0
 
@@ -464,7 +488,7 @@ class Static_results:
                                                                                       'Mz': total_force[5]}
         return output
 
-    def section_stress(self, option: str, line: Line, length: float, resolution: int = 'auto') -> plt.figure:
+    def _inner_section_stress(self, option, line, length, resolution):
 
         # check input
         stress_key = ('nx', 'sy', 'sz', 'st', 'ny', 'nz', 'total')
@@ -503,7 +527,7 @@ class Static_results:
         element = None
 
         for i in line.elements_index:
-            element = self._model.elements[i]
+            element = self._model._elements[i]
             in_length += element.L
             if in_length >= length:
                 break
@@ -520,7 +544,10 @@ class Static_results:
         fig, ax = graph.get_fig()
         ax.set_title(title)
 
-        self._mpl_figs.append(fig)
+        return fig
 
+    def section_stress(self, option: str, line: Line, length: float, resolution: int = 'auto') -> plt.figure:
+        fig = self._get_fig(self._inner_section_stress, (option, line, length, resolution))
+        self._mpl_figs.append(fig)
         return fig
 

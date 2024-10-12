@@ -6,22 +6,22 @@ from Load import Displacement, Force, Torque, Pressure
 
 class Static:
     def __init__(self, mesh: Mesh, displacement_bc: list, forces_bc: list, analytical_shear_stresses: bool = False):
-        self.mesh = mesh
-        self.displacement_bc = displacement_bc  # boundary conditions of the restraint
-        self.forces_bc = forces_bc  # forcing boundary conditions
+        self._mesh = mesh
+        self._displacement_bc = displacement_bc  # boundary conditions of the restraint
+        self._forces_bc = forces_bc  # forcing boundary conditions
         """
         if true recalculates stresses based on analytical theory - only available for standard cross sections
         """
         self.analytical_shear_stresses = analytical_shear_stresses
 
-        self.check_input()
-        self.check_if_fix()
+        self._check_input()
+        self._check_if_fix()
 
-        self.elements = self.mesh.elements
-        self.nodes = self.mesh.nodes
-        self.current_node = self.mesh.current_node
+        self._elements = self._mesh.elements
+        self._nodes = self._mesh.nodes
+        self._m_size = len(self._nodes)
 
-        self.displacement_points = []  # points where restraint boundary condition was added
+        self._displacement_points = []  # points where restraint boundary condition was added
 
         self.k_matrix = None  # global stiffness matrix
         self.c_matrix = None  # global force matrix
@@ -29,27 +29,27 @@ class Static:
 
         self.solved = False
 
-    def check_input(self):
-        if type(self.mesh) != Mesh:
+    def _check_input(self):
+        if type(self._mesh) != Mesh:
             raise TypeError("argument - mesh must be Mesh")
 
-        if type(self.displacement_bc) != list and type(self.displacement_bc) != np.ndarray:
+        if type(self._displacement_bc) != list and type(self._displacement_bc) != np.ndarray:
             raise TypeError("argument - displacement_bc must be LIST")
         else:
-            for bc in self.displacement_bc:
+            for bc in self._displacement_bc:
                 if type(bc) != Displacement:
                     raise TypeError("Elements of displacement_bc list must be Displacement")
 
-        if type(self.forces_bc) != list and type(self.forces_bc) != np.ndarray:
+        if type(self._forces_bc) != list and type(self._forces_bc) != np.ndarray:
             raise TypeError("argument forces_BC must be List")
         else:
-            for bc in self.forces_bc:
+            for bc in self._forces_bc:
                 if type(bc) != Force and type(bc) != Torque and type(bc) != Pressure:
                     raise TypeError("elements of forces_bc list must be Force, Torque or Pressure")
         if type(self.analytical_shear_stresses) != bool:
             raise TypeError("argument analytical_shear_stresses must be bool")
 
-    def check_if_fix(self):
+    def _check_if_fix(self):
         # check if system is fixed in space
         ux = False
         uy = False
@@ -61,7 +61,7 @@ class Static:
         roty = False
         rotz = False
 
-        for load in self.displacement_bc:
+        for load in self._displacement_bc:
             if load.ux is not None:
                 ux = True
                 nx += 1
@@ -91,13 +91,13 @@ class Static:
         if not(ux and uy and uz and rotx and roty and rotz):
             raise AttributeError('system is not fixed - check boundary conditions')
 
-    def create_k_matrix(self):
+    def _create_k_matrix(self):
         # calculation of global stiffness matrix, by add all global stiffness matrix of mesh elements
         logger.warning('Creating global stiffness matrix..')
 
         # creation of empty matrix to start adding - shape determined based on number of elements in the mesh
-        self.k_matrix = np.zeros((6*self.current_node, 6*self.current_node))
-        for element in self.elements:
+        self.k_matrix = np.zeros((6*self._m_size, 6*self._m_size))
+        for element in self._elements:
             k_local = element.get_global_k_matrix()
 
             q1 = k_local[0:6, 0:6]
@@ -119,17 +119,17 @@ class Static:
 
         logger.info("Global stiffness matrix created")
 
-    def apply_loads(self):
+    def _apply_loads(self):
 
         logger.warning("Applying loads...")
 
-        self.c_matrix = np.matrix(np.zeros((self.current_node*6, 1)))
+        self.c_matrix = np.matrix(np.zeros((self._m_size*6, 1)))
 
-        for load in self.forces_bc:
+        for load in self._forces_bc:
             if load.type == 'Force' or load.type == 'Torque':
                 if load.point.node_number is not None:
                     # adding force or moment boundary condition to the global force matrix
-                    self.c_matrix[load.get_node(), 0] += load.value
+                    self.c_matrix[load._get_node(), 0] += load.value
                 else:
                     raise AttributeError(f"argument - point for Force and Torque must be meshed")
 
@@ -143,7 +143,7 @@ class Static:
                     if type(value_vector) == float or type(value_vector) == int:
                         value_vector = value_vector * np.ones(len(load.line.elements_index) * 10)
                     else:
-                        load.extend_value_vector()
+                        load._extend_value_vector()
                         value_vector = load.value
 
                     line = load.line
@@ -152,7 +152,7 @@ class Static:
                     # x1, x2 - local coordinates on the line at the beginning and at the end of element
                     x1 = 0
                     for index in load.line.elements_index:
-                        element = self.elements[index]
+                        element = self._elements[index]
                         x2 = x1 + element.L
 
                         """
@@ -162,8 +162,8 @@ class Static:
                         returned indexes. 
                         """
 
-                        id_1 = load.find_index(x1, x_vector)
-                        id_2 = load.find_index(x2, x_vector)
+                        id_1 = load._find_index(x1, x_vector)
+                        id_2 = load._find_index(x2, x_vector)
 
                         # pressure vector acting at element
                         in_values = value_vector[id_1[-1]:id_2[0]+1]
@@ -189,10 +189,10 @@ class Static:
                         in_x = np.linspace(0, element.L, len(in_values))
 
                         # calculation of coefficients to calculate the reactions caused by distributed load
-                        n1_vector = np.array([load.calc_N1(x, element.L) for x in in_x])
-                        n2_vector = np.array([load.calc_N2(x, element.L) for x in in_x])
-                        n3_vector = np.array([load.calc_N3(x, element.L) for x in in_x])
-                        n4_vector = np.array([load.calc_N4(x, element.L) for x in in_x])
+                        n1_vector = np.array([load._calc_N1(x, element.L) for x in in_x])
+                        n2_vector = np.array([load._calc_N2(x, element.L) for x in in_x])
+                        n3_vector = np.array([load._calc_N3(x, element.L) for x in in_x])
+                        n4_vector = np.array([load._calc_N4(x, element.L) for x in in_x])
 
                         dx = in_x[1] - in_x[0]  # distance between points
 
@@ -219,10 +219,10 @@ class Static:
                 else:
                     raise AttributeError(f"argument - line for Pressure bc must be meshed")
 
-        for load in self.displacement_bc:
+        for load in self._displacement_bc:
             if load.point.node_number is not None:
-                self.displacement_points.append(load.point)
-                nodes = load.get_nodes()
+                self._displacement_points.append(load.point)
+                nodes = load._get_nodes()
                 for node in nodes:
                     # resetting the row of the stiffness matrix to apply the given deformation
                     self.k_matrix[node[0], :] = 0
@@ -232,7 +232,7 @@ class Static:
                 raise AttributeError(f"argument - point for displacement bc must be meshed")
 
         # assigning 1 on the diagonal of the matrix for zero elements to make matrix possible to invert
-        for i in range(0, 6 * self.current_node):
+        for i in range(0, 6 * self._m_size):
             if self.k_matrix[i, i] == 0:
                 self.k_matrix[i, i] = 1
 
@@ -240,20 +240,20 @@ class Static:
 
     def solve(self):
 
-        self.create_k_matrix()
-        self.apply_loads()
+        self._create_k_matrix()
+        self._apply_loads()
 
         logger.warning("Solving linear equations...")
 
         # solving a system of linear equations
         self.x_matrix = np.linalg.solve(self.k_matrix, self.c_matrix)
 
-        for n in range(0, self.current_node):
+        for n in range(0, self._m_size):
             for i in range(0, 6):
-                self.nodes[n].displacement_vector[0, i] = self.x_matrix[6 * n + i, 0]
+                self._nodes[n].displacement_vector[0, i] = self.x_matrix[6 * n + i, 0]
 
         if self.analytical_shear_stresses:
-            for element in self.elements:
+            for element in self._elements:
                 if element.section.custom:
                     AttributeError("Option - analytical_shear_stresses can be true only for standard cross sections")
 
@@ -267,7 +267,7 @@ class Static:
         disp_vector = np.empty((0, 8, resolution))
         points_vector = np.empty((0, 3, resolution))
 
-        for element in self.elements:
+        for element in self._elements:
             in_disp, in_points = element.get_disp_vector(resolution, index=index)
             disp_vector = np.vstack((disp_vector, [in_disp]))
             points_vector = np.vstack((points_vector, [in_points]))
@@ -279,7 +279,7 @@ class Static:
         stress_vector = np.empty((0, 6, resolution-1))
         force_vector = np.empty((0, 6, resolution-1))
 
-        for element in self.elements:
+        for element in self._elements:
             in_stress, in_force = element.get_stress_force_vector(resolution, index=index)
             stress_vector = np.vstack((stress_vector, [in_stress]))
             force_vector = np.vstack((force_vector, [in_force]))
@@ -289,7 +289,7 @@ class Static:
     def get_vMs(self, resolution, index=0):
         # returns 2d arrays of von Misses stresses for all elements
         vMs = np.empty((0, resolution - 1))
-        for element in self.elements:
+        for element in self._elements:
             INvMs = element.get_vMs(resolution, index=index)
             vMs = np.vstack([vMs, INvMs])
         return vMs
@@ -297,7 +297,7 @@ class Static:
     def get_points(self):
         # returns all points that creates geometry
         output = np.array([])
-        for point in self.mesh.points:
+        for point in self._mesh.points:
             val = {'index': point.index, 'coordinates': point.point_vector}
             output = np.append(output, val)
 
