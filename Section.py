@@ -20,7 +20,7 @@ class Section:
         self.max_z = max_z  # the maxima distance from the edge to the center of the cross-section in z-direction
 
         # returns shear correction factor depending on the shape of the cross-section
-        self._shear_factor_fun = shear_factor_fun
+        self._shear_factor_fun_by_user = shear_factor_fun
         self.custom = True
         self.circular = False
         self.resolution = 300
@@ -31,8 +31,6 @@ class Section:
 
         self._z_points = None
         self._y_points = None
-
-        self._mask = None
 
         self._check_input()
 
@@ -136,6 +134,72 @@ class Section:
         else:
             return (T * max(self.max_z, self.max_y) / (self.Iz + self.Iy)) * output
 
+    def _shear_factor_fun(self, v):
+        if self._current_section == "rectangle":
+            return 10 * (1 + v) / (12 + 11 * v)
+
+        elif self._current_section == "box":
+            a_out, b_out, a_in, b_in = self._dimensions
+
+            t1 = (a_out - a_in) / 2
+            t2 = (b_out - b_in) / 2
+            m = b_out * t1 / a_out * t2
+            n = b_out / a_out
+
+            return 10 * (1 + v) * (1 + 3 * m) ** 2 / ((12 + 72 * m + 150 * m ** 2 + 90 * m ** 3) + v * (
+                        11 + 66 * m + 135 * m ** 2 + 90 * m ** 3) + 10 * n ** 2 * ((3 + v) * m + 3 * m ** 2))
+
+        elif self._current_section == "circle":
+            return 6 * (1 + v) / (7 + 6 * v)
+
+        elif self._current_section == 'pipe':
+            out_radius, in_radius = self._dimensions
+
+            m = in_radius / out_radius
+
+            return 6 * (1 + v) * (1 + m ** 2) ** 2 / ((7 + 6 * v) * (1 + m ** 2) ** 2 + (20 + 12 * v) * m ** 2)
+
+        elif self._current_section == "I_shape":
+            a_y, b_z, t1, t2 = self._dimensions
+
+            m = 2 * b_z * t1 / a_y * t2
+            n = b_z / a_y
+
+            return 10 * (1 + v) * (1 + 3 * m) ** 2 / ((12 + 72 * m + 150 * m ** 2 + 90 * m ** 3) + v * (
+                        11 + 66 * m + 135 * m ** 2 + 90 * m ** 3) + 30 * n ** 2 * (m + m ** 2) + 5 * v * n ** 2 * (
+                                                                  8 * m + 9 * m ** 2))
+        elif self._shear_factor_fun_by_user is None:
+            return 5/6
+
+        else:
+            return self._shear_factor_fun_by_user(v)
+
+    def _mask(self, values):
+        if self._current_section == "box":
+            a_out, b_out, a_in, b_in = self._dimensions
+
+            return np.ma.masked_where(
+                np.logical_and(self._z_points ** 2 < (0.5 * b_in) ** 2, self._y_points ** 2 < (0.5 * a_in) ** 2),
+                values)
+
+        elif self._current_section == "circle":
+            radius = self._dimensions
+            return np.ma.masked_where(self._z_points ** 2 + self._y_points ** 2 > radius ** 2, values)
+
+        elif self._current_section == 'pipe':
+            out_radius, in_radius = self._dimensions
+
+            return np.ma.masked_where((self._z_points ** 2 + self._y_points ** 2 > out_radius ** 2) | (
+                        self._z_points ** 2 + self._y_points ** 2 < in_radius ** 2), values)
+
+        elif self._current_section == "I_shape":
+            a_y, b_z, t1, t2 = self._dimensions
+
+            return np.ma.masked_where(np.logical_and(self._z_points ** 2 > (0.5 * t2) ** 2,
+                                                     self._y_points ** 2 < (0.5 * (a_y - 2 * t1)) ** 2), values)
+        else:
+            return values
+
     def _check_input(self):
         float_greater_than_0(self.A, "argument - A (area) must be FLOAT or INT",
                              "argument - A (area) - must be greater than 0")
@@ -152,12 +216,12 @@ class Section:
         float_greater_than_0(self.max_y, "argument - max_y (max distance from y axis) must be FLOAT or INT",
                              "argument - max_y (max distance from y axis) must be greater than 0")
 
-        if self._shear_factor_fun is None:
-            self._shear_factor_fun = lambda v: 5 / 6
-        elif not callable(self._shear_factor_fun):
+        if self._shear_factor_fun_by_user is None:
+            pass
+        elif not callable(self._shear_factor_fun_by_user):
             raise TypeError("argument - shear_factor_fun must be lambda function")
         else:
-            num_args = len(inspect.signature(self._shear_factor_fun).parameters)
+            num_args = len(inspect.signature(self._shear_factor_fun_by_user).parameters)
             if num_args != 1:
                 raise AttributeError("argument - shear_factor_fun must be lambda function of one input argument")
 
@@ -199,12 +263,9 @@ a_y  │─────▌─────────•────────
         self.max_z = 0.5 * b_z
         self.max_y = 0.5 * a_y
 
-        self._shear_factor_fun = lambda v: 10 * (1 + v) / (12 + 11 * v)
-
         zz = np.linspace(-0.5 * b_z, 0.5 * b_z, self.resolution)
         yy = np.linspace(-0.5 * a_y, 0.5 * a_y, self.resolution)
         self._z_points, self._y_points = np.meshgrid(zz, yy)
-        self._mask = lambda values: values
 
     def box(self, a_out: float, b_out: float, a_in: float, b_in: float):
         """
@@ -249,20 +310,9 @@ a_y  │─────▌─────────•────────
         self.max_z = 0.5 * b_out
         self.max_y = 0.5 * a_out
 
-        t1 = (a_out - a_in) / 2
-        t2 = (b_out - b_in) / 2
-        m = b_out * t1 / a_out * t2
-        n = b_out / a_out
-
-        self._shear_factor_fun = lambda v: 10 * (1 + v) * (1 + 3 * m) ** 2 / (
-                    (12 + 72 * m + 150 * m ** 2 + 90 * m ** 3) + v * (
-                        11 + 66 * m + 135 * m ** 2 + 90 * m ** 3) + 10 * n ** 2 * ((3 + v) * m + 3 * m ** 2))
-
         zz = np.linspace(-0.5 * b_out, 0.5 * b_out, self.resolution)
         yy = np.linspace(-0.5 * a_out, 0.5 * a_out, self.resolution)
         self._z_points, self._y_points = np.meshgrid(zz, yy)
-        self._mask = lambda values: np.ma.masked_where(
-            np.logical_and(self._z_points ** 2 < (0.5 * b_in) ** 2, self._y_points ** 2 < (0.5 * a_in) ** 2), values)
 
     def circle(self, diameter: float):
         """
@@ -302,14 +352,11 @@ a_y  │─────▌─────────•────────
         self.max_z = radius
         self.max_y = radius
 
-        self._shear_factor_fun = lambda v: 6 * (1 + v) / (7 + 6 * v)
-
         zz = np.linspace(-0.999 * 0.5 * diameter, 0, int(self.resolution / 2))
         zz = np.append(zz, np.linspace(-0, 0.999 * 0.5 * diameter, int(self.resolution / 2)))
         yy = zz
 
         self._z_points, self._y_points = np.meshgrid(zz, yy)
-        self._mask = lambda values: np.ma.masked_where(self._z_points ** 2 + self._y_points ** 2 > radius ** 2, values)
 
     def pipe(self, out_diameter: float, in_diameter: float):
         """
@@ -356,18 +403,9 @@ a_y  │─────▌─────────•────────
         self.max_z = out_radius
         self.max_y = out_radius
 
-        m = in_radius / out_radius
-
-        self._shear_factor_fun = lambda v: 6 * (1 + v) * (1 + m ** 2) ** 2 / (
-                (7 + 6 * v) * (1 + m ** 2) ** 2 + (20 + 12 * v) * m ** 2)
-
         zz = np.linspace(-0.999 * 0.5 * out_diameter, 0.999 * 0.5 * out_diameter, self.resolution)
         yy = np.linspace(-0.999 * 0.5 * out_diameter, 0.999 * 0.5 * out_diameter, self.resolution)
         self._z_points, self._y_points = np.meshgrid(zz, yy)
-        self._mask = lambda values: np.ma.masked_where(
-            (self._z_points ** 2 + self._y_points ** 2 > out_radius ** 2) |
-            (self._z_points ** 2 + self._y_points ** 2 < in_radius ** 2),
-            values)
 
     def I_shape(self, a_y: float, b_z: float, t1: float, t2: float):
         """
@@ -408,17 +446,6 @@ a_y  │─────▌─────────•────────
         self.max_z = 0.5 * b_z
         self.max_y = 0.5 * a_y
 
-        m = 2 * b_z * t1 / a_y * t2
-        n = b_z / a_y
-
-        self._shear_factor_fun = lambda v: 10 * (1 + v) * (1 + 3 * m) ** 2 / (
-                (12 + 72 * m + 150 * m ** 2 + 90 * m ** 3) + v * (
-                11 + 66 * m + 135 * m ** 2 + 90 * m ** 3) + 30 * n ** 2 * (m + m ** 2) + 5 * v * n ** 2 * (
-                            8 * m + 9 * m ** 2))
-
         zz = np.linspace(-0.5 * b_z, 0.5 * b_z, self.resolution)
         yy = np.linspace(-0.5 * a_y, 0.5 * a_y, self.resolution)
         self._z_points, self._y_points = np.meshgrid(zz, yy)
-        self._mask = lambda values: np.ma.masked_where(
-            np.logical_and(self._z_points ** 2 > (0.5 * t2) ** 2, self._y_points ** 2 < (0.5 * (a_y - 2 * t1)) ** 2),
-            values)

@@ -30,7 +30,7 @@ line3 = Line(point1=point2, point2=point4, material=material, section=section, i
 
 # mesh definition - step 100cm
 mesh = Mesh()
-mesh.max_element_size(0.1, [line1, line2, line3])
+mesh.max_element_size(1, [line1, line2, line3])
 
 # boundary conditions definition
 force1 = Force(point=point3, direction='y', value=-50000)

@@ -3,9 +3,6 @@ import plotly
 import sys
 import os
 import plotly.offline
-from PyQt5.QtCore import QUrl
-from PyQt5.QtWebEngineWidgets import QWebEngineView
-from PyQt5.QtWidgets import QApplication
 from Model import Static
 from modules.Graph import Graph2d, Bar_2d, Graph3d, Bar_3d, Section_graph
 import numpy as np
@@ -21,18 +18,6 @@ class Static_results:
 
         self._plotly_figs = []  # list of created matplotlib graphs
         self._mpl_figs = []  # list of created plotly graphs
-
-    def _run_method_in_process(self, method, args, queue):
-        result = method(*args)  # Call the method with the unpacked arguments
-        queue.put(result)  # Send the result back to the main process
-
-    def _get_fig(self, method, args):
-        queue = Queue()
-        process1 = Process(target=self._run_method_in_process, args=(method, args, queue))
-        process1.start()
-        process1.join(timeout=5)
-
-        return queue.get()
 
     def _check_input(self):
         if type(self._model) != Static:
@@ -244,16 +229,16 @@ class Static_results:
                        show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto',
                        cursor: bool = False) -> plt.figure:
 
-        fig = self._get_fig(self._basic_2d_results, (option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
-                                      'deformation', cursor))
+        fig = self._basic_2d_results(option, scale, plane, show_undeformed, show_points, show_nodes, resolution,
+                                      'deformation', cursor)
         self._mpl_figs.append(fig)
         return fig
 
     def deformation_3d(self, option: str, scale: float = 'auto', show_undeformed: bool = False,
                        show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto') -> go.Figure:
 
-        fig = self._get_fig(self._basic_3d_results, (option, scale, show_undeformed, show_points, show_nodes, resolution,
-                                      'deformation'))
+        fig = self._basic_3d_results(option, scale, show_undeformed, show_points, show_nodes, resolution,
+                                      'deformation')
         self._plotly_figs.append(fig)
         return fig
 
@@ -269,7 +254,7 @@ class Static_results:
     def stress_3d(self, option: str, scale: float = 'auto', show_undeformed: bool = False,
                   show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto') -> go.Figure:
 
-        fig = self._get_fig(self._basic_3d_results, (option, scale, show_undeformed, show_points, show_nodes, resolution, 'stress'))
+        fig = self._basic_3d_results(option, scale, show_undeformed, show_points, show_nodes, resolution, 'stress')
         self._plotly_figs.append(fig)
         return fig
 
@@ -285,7 +270,7 @@ class Static_results:
     def force_3d(self, option: str, scale: float = 'auto', show_undeformed: bool = False,
                  show_points: bool = False, show_nodes: bool = False, resolution: int = 'auto') -> go.Figure:
 
-        fig = self._get_fig(self._basic_3d_results, (option, scale, show_undeformed, show_points, show_nodes, resolution, 'force'))
+        fig = self._basic_3d_results(option, scale, show_undeformed, show_points, show_nodes, resolution, 'force')
         self._plotly_figs.append(fig)
         return fig
 
@@ -331,7 +316,7 @@ class Static_results:
         return fig
 
     def bar_deformation_3d(self, option: str, resolution: int = 'auto') -> go.Figure:
-        fig = self._get_fig(self._basic_3d_bar_results, (option, resolution, 'deformation'))
+        fig = self._basic_3d_bar_results(option, resolution, 'deformation')
         self._plotly_figs.append(fig)
         return fig
 
@@ -342,7 +327,7 @@ class Static_results:
         return fig
 
     def bar_stress_3d(self, option: str, resolution: int = 'auto') -> go.Figure:
-        fig = self._get_fig(self._basic_3d_bar_results, (option, resolution, 'stress'))
+        fig = self._basic_3d_bar_results(option, resolution, 'stress')
         self._plotly_figs.append(fig)
         return fig
 
@@ -353,32 +338,16 @@ class Static_results:
         return fig
 
     def bar_force_3d(self, option: str, resolution: int = 'auto') -> go.Figure:
-        fig = self._get_fig(self._basic_3d_bar_results, (option, resolution, 'force'))
+        fig = self._basic_3d_bar_results(option, resolution, 'force')
         self._plotly_figs.append(fig)
         return fig
 
     def evaluate_all_results(self):
-        # shows all returned figures in separated windows
-        index = 1
-        windows = []
+        # show plotly results in browser
         for fig in self._plotly_figs:
-            # save plotly figure in temp directory
-            file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), f'temp/fig{index}.html'))
-            plotly.offline.plot(fig, filename=file_path, auto_open=False)
-            web = QWebEngineView()  # set web browser to qt application
-            web.load(QUrl.fromLocalFile(file_path))  # load saved figure to application
-            web.setWindowTitle('Results graph')
-            web.setGeometry(200, 200, 800, 600)
-            windows.append(web)
-            index += 1
-        for window in windows:
-            window.show()  # show all plotly figures
+            fig.show()
 
         plt.show()  # show all matplotlib figures
-
-        for i in range(1, index):
-            file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), f'temp/fig{i}.html'))
-            os.remove(file_path)  # remove all saved figures from temp directory after close all windows
 
     def _check_max_value_input(self, option, lines, data_type):
         deformation_key = ('ux', 'uy', 'uz', 'rotx', 'roty', 'rotz', 'total_disp', 'total_rot')
@@ -547,7 +516,7 @@ class Static_results:
         return fig
 
     def section_stress(self, option: str, line: Line, length: float, resolution: int = 'auto') -> plt.figure:
-        fig = self._get_fig(self._inner_section_stress, (option, line, length, resolution))
+        fig = self._inner_section_stress(option, line, length, resolution)
         self._mpl_figs.append(fig)
         return fig
 
