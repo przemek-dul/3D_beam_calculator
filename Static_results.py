@@ -1,15 +1,12 @@
 import matplotlib.pyplot as plt
-import plotly
-import sys
-import os
-import plotly.offline
 from Model import Static
 from modules.Graph import Graph2d, Bar_2d, Graph3d, Bar_3d, Section_graph
 import numpy as np
 import plotly.graph_objects as go
 from Line import Line
 from loguru import logger
-from multiprocessing import Process, Queue
+from modules.Mulitplots import Multi_graph
+from threading import Thread
 
 
 class Static_results:
@@ -18,6 +15,7 @@ class Static_results:
 
         self._plotly_figs = []  # list of created matplotlib graphs
         self._mpl_figs = []  # list of created plotly graphs
+        self._multiplots = []
 
     def _check_input(self):
         if type(self._model) != Static:
@@ -28,6 +26,14 @@ class Static_results:
     # resolution defines number of points per element to approximate values by shape functions
     def _get_resolution(self, value, option='default'):
         # automatic calculate resolution if user did not define it
+
+        if type(value) != str and type(value) != int:
+            raise TypeError("argument - resolution must be INT or 'auto'")
+        elif type(value) == str and value != 'auto':
+            raise ValueError("argument - resolution must be INT or 'auto'")
+        elif type(value) == int and value < 2:
+            raise ValueError("argument - resolution must be greater or equal to 3")
+
         max_resolution = 100
         min_resolution = 3
         if value != 'auto':
@@ -144,13 +150,6 @@ class Static_results:
             if option not in ('fx', 'fy', 'fz', 'mx', 'my', 'mz'):
                 raise ValueError("""argument - must take one of the following values:
                         'fx', 'fy', 'fz', 'mx', 'my', 'mz'""")
-
-        if type(resolution) != str and type(resolution) != int:
-            raise TypeError("argument - resolution must be INT or 'auto'")
-        elif type(resolution) == str and resolution != 'auto':
-            raise ValueError("argument - resolution must be INT or 'auto'")
-        elif type(resolution) == int and resolution < 2:
-            raise ValueError("argument - resolution must be greater or equal to 3")
 
         if scale is not None:
             if type(scale) != str and type(scale) != float:
@@ -347,6 +346,12 @@ class Static_results:
         for fig in self._plotly_figs:
             fig.show()
 
+        if len(self._multiplots) > 1:
+            raise AttributeError("You can create only one object of multiplot")
+        if len(self._multiplots) == 1:
+            dash_thread = Thread(target=self._multiplots[0].run, kwargs={'debug': False})
+            dash_thread.start()
+
         plt.show()  # show all matplotlib figures
 
     def _check_max_value_input(self, option, lines, data_type):
@@ -483,12 +488,6 @@ class Static_results:
                       'ny': {'index': 4, 'tittle': 'Normal stress due to bending in local y-direction'},
                       'nz': {'index': 5, 'tittle': 'Normal stress due to bending in local z-direction'},
                       'total': {'index': 6, 'tittle': 'Von Misses Stress'}}
-        if type(resolution) != str and type(resolution) != int:
-            raise TypeError("argument - resolution must be INT or 'auto'")
-        elif type(resolution) == str and resolution != 'auto':
-            raise ValueError("argument - resolution must be INT or 'auto'")
-        elif type(resolution) == int and resolution < 2:
-            raise ValueError("argument - resolution must be greater or equal to 3")
 
         resolution = self._get_resolution(resolution)
 
@@ -519,4 +518,11 @@ class Static_results:
         fig = self._inner_section_stress(option, line, length, resolution)
         self._mpl_figs.append(fig)
         return fig
+
+    def multi_plot(self):
+        graph = Multi_graph(self)
+        app = graph.get_app()
+        self._multiplots.append(app)
+        return graph.get_app()
+
 

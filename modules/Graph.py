@@ -77,7 +77,6 @@ class Graph2d:
 
             if self.scale < 1:
                 self.scale = 1
-
         self.basic_dim = (s1 - s2) / 80
 
     def basic_plot(self):
@@ -369,6 +368,7 @@ class Graph3d(Graph2d):
                 text=[f'Value: {value_format(x)}' for x in self.values[i]],
                 hoverinfo='text',
                 showlegend=False,
+                opacity=0.8,
                 line=dict(
                     color=in_value,
                     width=20,
@@ -392,8 +392,8 @@ class Graph3d(Graph2d):
                 mode='lines',
                 hoverinfo='text',
                 line=dict(
-                    color='gray',
-                    width=5, ),
+                    color='purple',
+                    width=10, ),
                 showlegend=False))
         fig.data = fig.data[::-1]
         return fig

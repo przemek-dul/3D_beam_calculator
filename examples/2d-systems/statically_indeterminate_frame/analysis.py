@@ -46,32 +46,12 @@ model.solve()
 # plot results
 results = Results(model)
 
-fig1 = results.deformation_3d('uy', show_undeformed=True, show_points=True, show_nodes=True)
-
-fig2 = results.deformation_3d('rotz', show_undeformed=True, show_points=True, show_nodes=True)
-
-fig3 = results.bar_force_2d(option='fy')
-fig4 = results.bar_force_2d(option='mz')
-
-fig5 = results.bar_stress_2d(option='ny')
-fig6 = results.bar_stress_2d(option='sy')
-fig7 = results.bar_stress_3d(option='total')
-
 fig8 = results.section_stress(option='ny', line=line2, length=3)
 fig9 = results.section_stress(option='sy', line=line2, length=3)
 fig10 = results.section_stress(option='total', line=line2, length=3)
 
-"""
-fig1.savefig("Uy_deformation.png")
-fig2.savefig("Rot_z_angle.png")
-fig3.savefig("Shear_force-local_y_direction.png")
-fig4.savefig("Bending_moment-local_z_axis.png")
-fig5.savefig("Maximum_Normal_stress_due_to_bending_in_local_y-direction.png")
-fig6.savefig("Maximum_Shear_stress_due_to_bending_in_local_y-direction.png")
-fig7.savefig("Maximum_von_Misses Stress.png")
-fig8.savefig("Section_normal_stress_due_to_bending_in_local_y-direction.png.png")
-fig9.savefig("Section_shear_stress_due_to_bending_in_local_y-direction.png")
-fig10.savefig("Section_maximum_von_Misses Stress.png")
-"""
+app = results.multi_plot()
 
 results.evaluate_all_results()
+
+
